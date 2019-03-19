@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+
+    <title>Diffusion Feature Demo</title>
+
+    <style>
+        .fade-enter-active, .fade-leave-active {
+            transition: opacity .5s;
+        }
+        .fade-enter, .fade-leave-to /* .fade-leave-active below version 2.1.8 */ {
+            opacity: 0;
+        }
+
+        .modal .table th { border-top: none; }
+
+
+    </style>
+</head>
+<body>
+<div class="container" id="app">
+    <div class="row">
+        <div class="col-12">
+            <hr />
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <h3>Connecting</h3>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-6">
+            <form class="form-group">
+                <p>
+                    <input class="form-control" type="text" v-model="username" placeholder="Username" />
+                </p>
+                <p>
+                    <input class="form-control" type="password" v-model="password" placeholder="" />
+                </p>
+                <button type="button" class="btn btn-success" v-on:click="connect">Connect</button>
+                <button type="button" class="btn btn-danger" v-on:click="disconnect">Disconnect</button>
+            </form>
+            <div v-bind:class="statusStyle" role="alert">
+                {{statusMsg}}
+            </div>
+        </div>
+        <div class="col-5">
+            <pre><code>{{connectCode}}</code></pre>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col">
+            <h3>Subscribing</h3>
+            <p>
+            <pre><code>{{subscribeCode}}</code></pre>
+            </p>
+            <form class="form-inline">
+                <div class="form-group mb-3">
+                    <select v-model="destination" class="form-control">
+                        <option value=".*">All</option>
+                        <option>SFO</option>
+                        <option>SJC</option>
+                        <option>LAX</option>
+                        <option>SAN</option>
+                        <option>OAK</option>
+                    </select>
+                </div>
+                <div class="form-group mb-3">
+                    <input type="text" class="form-control" placeholder="Package ID" v-model="selector" style="margin-right: 30px;">
+                </div>
+                <div class="btn-group mb-3">
+                    <button type="button" class="btn btn-primary" v-on:click="subscribe">Select</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col">
+            <table class="table table-sm table-striped table-hover">
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Destination</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody v-for="(val, topic) in topics">
+                <tr>
+                    <td>{{val.fields.id}}</td>
+                    <td>{{val.fields.destination}}</td>
+                    <td :class="sameStatus(val)">{{val.fields.status}}</td>
+                    <td>{{humanDate(val)}}</td>
+                    <td><button v-on:click="history(val, topic)" class="btn btn-sm btn-outline-primary">History</button></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+
+    <transition name="fade">
+        <div class="modal" tabindex="-1" role="dialog" v-show="timeseries.display" style="display: block; background: #505050a6;">
+            <div class="modal-dialog" role="document" style="max-width:800px;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Order #{{timeseries.order.fields.id}} ({{timeseries.order.fields.destination}})</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close" v-on:click="timeseries.display=false">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <form class="form-inline">
+                            <div class="form-group mb-3">
+                                <input type="text" class="form-control" v-model="timeseries.status" style="margin-right: 30px;">
+                            </div>
+                            <div class="btn-group mb-3">
+                                <button type="button" class="btn btn-outline-success" v-on:click="update">Update status</button>
+                            </div>
+                            <div class="btn-group mb-3" style="margin-left: 140px">
+                                <button type="button" class="btn btn-outline-danger" v-on:click="cancel">Delete order</button>
+                            </div>
+                        </form>
+                        <div class="alert alert-success" role="alert" v-if="messageSuccess">
+                            {{messageSuccess}}
+                        </div>
+                        <div class="alert alert-danger" role="alert" v-if="messageError">
+                            {{messageError}}
+                        </div>
+                        <table class="table table-sm table-striped" style="border-top:none">
+                            <thead>
+                            <tr>
+                                <th scope="col">Author</th>
+                                <th scope="col">Time of event</th>
+                                <th scope="col">Old status</th>
+                                <th scope="col">New status</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr v-for="event in timeseries.events">
+                                <td>{{event.author}}</td>
+                                <td>{{event.timestamp.fromNow()}}</td>
+                                <td>{{event.oldStatus}}</td>
+                                <td>{{event.newStatus}}</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </transition>
+</div>
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+<script src="http://download.pushtechnology.com/clients/6.2.3/js/diffusion.js"></script>
+<script src="https://momentjs.com/downloads/moment.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue"></script>
+
+<script type="text/javascript">
+    var jsonDataType = diffusion.datatypes.json();
+
+    var timeouts = {};
+    var session;
+
+    var app = new Vue({
+        el: '#app',
+        data: {
+            status: "init",
+            selector: "",
+            destination: ".*",
+            topics: {},
+            username: "",
+            password: "",
+            messageError: "",
+            messageSuccess: "",
+            timeseries : {
+                display : false,
+                order : { fields: {} },
+                events : {},
+                status : "",
+            }
+        },
+        methods: {
+            connect: function() {
+                app.status = "connecting";
+
+                var options = {
+                    host: "packagesdemo.eu.diffusion.cloud"
+                };
+
+                if (app.username) {
+                    options.principal = app.username;
+                }
+
+                if (app.password) {
+                    options.credentials = app.password;
+                }
+
+                diffusion.connect(options).then(function(s) {
+                    session = s;
+
+                    session.on({
+                        disconnect: setStatus("disconnected"),
+                        reconnect: setStatus("reconnected"),
+                        close: setStatus("closed")
+                    });
+
+                    app.status = "connected";
+
+                    session.addStream("?packages/.*/.*", jsonDataType).on({
+                        unsubscribe: handleUnsubscribe,
+                        value: handleValue
+                    });
+                }, function(err) {
+                    app.status = "failed";
+                    session = undefined;
+                });
+            },
+            disconnect: function() {
+                session.close();
+            },
+            subscribe: function() {
+                session.unsubscribe("?packages//");
+                session.select(this.selectorExpression);
+            },
+            history: function(order, topic) {
+                app.messageSuccess = "";
+                app.messageError = "";
+
+                session.timeseries.rangeQuery().as(jsonDataType).selectFrom(topic).then(function(result) {
+                    var events = result.events.map(formatEvent).reverse();
+
+                    app.timeseries.events = events;
+                    app.timeseries.display = true;
+                    app.timeseries.order = order;
+                });
+            },
+            update: function() {
+                session.messages.sendRequest('packages/update', {
+                    id: app.timeseries.order.fields.id,
+                    status: app.timeseries.status
+                }).then(function() {
+                    console.log("y");
+                    app.messageSuccess = "Updated status"
+                }, function(err) {
+                    console.log(err);
+                    app.messageError = "Failed to update status: " + err.reason;
+                });
+            },
+            cancel: function() {
+                session.messages.sendRequest('packages/delete', {
+                    id: app.timeseries.order.fields.id
+                }).then(function() {
+                    Vue.set(app.timeseries, 'display', false);
+                }, function(err) {
+                    app.messageError = "Failed to delete package: " + err.reason;
+                });
+            },
+            sameStatus: function(row) {
+                if ((!row.prev) || (row.prev && row.fields.status !== row.prev.status)) {
+                    return 'table-success';
+                }
+                return '';
+            },
+            humanDate: function(row) {
+                return moment(row.timestamp).fromNow();
+            }
+        },
+        computed: {
+            statusMsg: function() {
+                switch (this.status) {
+                    case "init": return "";
+                    case "connecting": return "Connecting to Diffusion";
+                    case "connected" : return "Connected to Diffusion";
+                    case "disconnected": return "Disconnected, attempting to reconnect";
+                    case "reconnected": return "Reconnected to Diffusion";
+                    case "closed": return "Connection to Diffusion closed";
+                    case "failed": return "Connection to Diffusion failed";
+                }
+            },
+            statusStyle: function() {
+                switch (this.status) {
+                    case "init": return { alert: true, "alert-light": true };
+                    case "connecting":
+                    case "disconnected" : return { alert: true, "alert-primary": true };
+                    case "connected" :
+                    case "reconnected": return { alert: true, "alert-success": true };
+                    case "closed": return { alert: true, "alert-warning": true };
+                    case "failed": return { alert: true, "alert-danger": true };
+                }
+            },
+            connectCode: function() {
+                var start = `diffusion.connect({
+    host: 'packagesdemo.eu.diffusion.cloud'`;
+
+                var code = start;
+
+                if (this.username) {
+                    code = code + `,
+    principal: '` + this.username + "'";
+                }
+
+                if (this.password) {
+                    code = code + `,
+    credentials: '` + this.password + "'";
+                }
+
+                return code + `
+}).then(success, failure);`;
+            },
+            subscribeCode: function() {
+                var pattern = this.selectorExpression;
+
+                return `session.stream("${pattern}").on('value', function(path, details, newValue, oldValue) {
+    ...
+});
+
+session.select("${pattern}");`;
+            },
+            selectorExpression: function() {
+                var pattern = "?packages/" + this.destination + "/";
+
+                if (this.selector) {
+                    return pattern + this.selector;
+                }
+
+                return pattern + "/";
+            }
+        }
+    });
+
+    function setStatus(v) {
+        return function() {
+            app.status = v;
+        };
+    }
+
+    function formatEvent(event, i, arr) {
+        return {
+            oldStatus : (arr[i-1] ? arr[i-1].value.get().status : ""),
+            newStatus : event.value.get().status,
+            timestamp : moment(event.timestamp),
+            author : event.author
+        };
+    }
+
+    function handleValue(t,s,v,v2) {
+        var previous = v2 ? v2.value.get() : null;
+        var update = v.value.get();
+
+        Vue.set(app.topics, t, {
+            fields: update,
+            prev: previous,
+            timestamp: v.timestamp
+        });
+
+        if (app.timeseries.order.fields.id === update.id) {
+            app.timeseries.events.unshift({
+                author : v.author,
+                timestamp : moment(v.timestamp),
+                oldStatus : previous.status,
+                newStatus : update.status
+            });
+        }
+
+        clearTimeout(timeouts[t]);
+
+        timeouts[t] = setTimeout(function() {
+            if (app.topics[t]) {
+                Vue.set(app.topics[t], 'prev', update);
+            }
+        }, 7000);
+    }
+
+    function handleUnsubscribe(t) {
+        Vue.delete(app.topics, t);
+    }
+</script>
+</body>
+</html>
