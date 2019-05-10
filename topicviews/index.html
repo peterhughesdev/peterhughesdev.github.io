@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" href="css/open-iconic-bootstrap.css">
+
+    <title>Topic View Wizard</title>
+</head>
+<body>
+<div id="app" class="container">
+    <div class="row">
+        <div class="col-2" style="padding-top: 30px;">
+            <form>
+                <div class="form-group">
+                    <label>Host / Port</label>
+                    <input type="text" class="form-control" placeholder="Diffusion Host" v-model="diffusion.options.host">
+                    <input type="text" class="form-control" placeholder="Diffusion Port" v-model="diffusion.options.port">
+                </div>
+
+                <div class="form-group">
+                    <label>Credentials</label>
+                    <input type="text" class="form-control" placeholder="Diffusion Username" v-model="diffusion.options.principal">
+                    <input type="password" class="form-control" placeholder="Diffusion Password" v-model="diffusion.options.credentials">
+                </div>
+
+                <a href="#" class="btn btn-success" @click="connect">Connect</a>
+            </form>
+        </div>
+
+        <div class="col-10" style="padding-top: 30px;">
+
+            <h2>Topic Views </h2>
+            <button type="button" class="btn btn-primary" v-bind:class="{ disabled : !connected }" data-toggle="modal" data-target="#viewModal">
+                New Topic View
+            </button>
+
+            <hr />
+
+            <table class="table table-striped">
+                <thead class="thead-dark">
+                    <tr>
+                        <th>Name</th>
+                        <th>Specification</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="(view, idx) in views">
+                        <td>{{view.name}}</td>
+                        <td><pre>{{view.specification}}</pre></td>
+                        <td>
+                            <button type="button" class="btn btn-secondary btn-sm" @click="removeView(idx)">
+                                <span class="oi oi-trash" aria-hidden="true"></span>
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal multi-step fade" id="viewModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header" v-on:click.self="deselectMapping">
+                    <h5 class="modal-title" id="exampleModalLabel">{{mode}} Topic View</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <div class="form-group" v-on:click.self="deselectMapping">
+                            <label for="viewName">View Name</label>
+                            <input type="text" class="form-control" id="viewName" placeholder="Enter Topic View Name" v-model="builder.name">
+                        </div>
+
+                        <div class="form-group" v-on:click.self="deselectMapping">
+                            <label for="topicSelector">Topic Selector</label>
+                            <input type="text" class="form-control" id="topicSelector" aria-describedby="topicSelectorHelp" placeholder="Enter topic selector" v-model="builder.selector">
+                            <small id="topicSelectorHelp" class="form-text text-muted">The topic selector used to select which topics this view applies to, e.g. <pre>?foo/bar//</pre></small>
+                        </div>
+
+                        <div class="form-group" v-on:click.self="deselectMapping">
+                            <label>View Path Mapping:</label>
+                            <button type="button" class="btn btn-primary btn-sm" @click="addMappingPart">
+                                <small><span class="oi oi-plus" aria-hidden="true"></span></small>&nbsp;Add part
+                            </button>
+
+                            <br />
+
+                            <template v-for="(part, idx) in mappingParts">
+                                <span class="" v-if="idx != 0">/</span>
+
+                                <span v-bind:class="part.classes" @click="selectMappingPart(idx)" >{{part.value}}</span>
+                            </template>
+
+                            <br />
+
+
+                        </div>
+
+                        <div class="mapping-form form-row" v-if="selectedPart">
+                            <div class="form-group col-4">
+                                <label for="topicViewPartSource">Source</label>
+                                <select id="topicViewPartSource" v-model="selectedPart.source">
+                                    <option value="Literal">Literal Path</option>
+                                    <option value="Path">Extract Path</option>
+                                    <option value="Value">Extract Value</option>
+                                </select>
+                            </div>
+
+                            <template v-if="selectedPart.source == 'Literal'">
+                                <div class="form-group col-8">
+                                    <label for="topicViewPathLiteral">Path literal</label>
+                                    <input class="form-control form-control-sm"type="text" id="topicViewPathLiteral" placeholder="" v-model="selectedPart.value">
+                                    <small class="form-text text-muted">A literal string path</small>
+                                </div>
+                            </template>
+
+                            <template v-if="selectedPart.source == 'Value'">
+                                <div class="form-group col-8">
+                                    <label for="topicViewPathValue">JSON Pointer</label>
+                                    <input class="form-control form-control-sm"type="text" id="topicViewPathValue" placeholder="" v-model="selectedPart.value">
+                                    <small class="form-text text-muted">A pointer specifying a key within the topic's JSON value</small>
+                                </div>
+                            </template>
+
+                            <template v-if="selectedPart.source == 'Path'">
+                                <div class="form-group col-4">
+                                    <label for="topicViewPathStart">From</label>
+                                    <input class="form-control form-control-sm"type="text" id="topicViewPathStart" placeholder="0" v-model="selectedPart.value">
+                                    <small class="form-text text-muted">0-based index of the start of source path to extract</small>
+                                </div>
+
+                                <div class="form-group col-4">
+                                    <label for="topicViewPathEnd">To</label>
+                                    <input class="form-control form-control-sm"type="text" id="topicViewPathEnd" placeholder="0" v-model="selectedPart.end">
+                                    <small class="form-text text-muted">0-based index of the end of source path to extract</small>
+                                </div>
+                            </template>
+
+                            <strong v-if="validateMappingPart(builder.selected)" class="text-danger">{{validateMappingPart(builder.selected)}}</strong>
+
+                            <hr />
+                            <button type="button" class="btn btn-secondary btn-sm" @click="removeMappingPart(builder.selected)">
+                                <small><span class="oi oi-trash" aria-hidden="true"></span></small>&nbsp;Remove part
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer" v-on:click.self="deselectMapping">
+                    <div class="row" v-if="builder.error">
+                        <div class="alert alert-danger" v-html="builder.error"></div>
+                    </div>
+
+                    <button type="button" class="btn btn-primary" @click="createTopicView">Create</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Optional JavaScript -->
+<!-- jQuery first, then Popper.js, then Bootstrap JS -->
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+<script src="http://download.pushtechnology.com/clients/6.3.0/js/diffusion-6.3.0.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue"></script>
+
+<script>
+
+function defaultBuilder() {
+    return {
+        name: "",
+        error: "",
+        selector: "",
+        mapping: [],
+        selected: 0
+    }
+}
+
+
+var app = new Vue({
+    el: '#app',
+    data: {
+        views: [],
+        mode: "Create",
+        builder: defaultBuilder(),
+        diffusion: {
+            options : {
+                host: "localhost",
+                port: 8080,
+                principal: "admin",
+                credentials: "password"
+            },
+            session : undefined
+        },
+        connected : false
+    },
+    methods: {
+        connect : function() {
+            var self = this;
+
+            diffusion.connect(this.diffusion.options).then(function(session) {
+                self.diffusion.session = session;
+                self.refreshTopicViews();
+                self.connected = true;
+            });
+        },
+        refreshTopicViews : function() {
+            var self = this;
+
+            this.diffusion.session.topicViews.listTopicViews().then(function(views) {
+                self.views = views;
+            });
+        },
+        createTopicView : function() {
+            var self = this;
+
+            console.log(this.builder.name, this.topicViewSpec);
+
+            this.diffusion.session.topicViews.createTopicView(this.builder.name, this.topicViewSpec).then(function(view) {
+                self.builder = defaultBuilder();
+                self.views.push(view);
+
+                $('#viewModal').modal('hide');
+            }, function(errors) {
+                self.builder.error = errors.map(function(err) { return err.message }).join("<br />");
+            });
+        },
+        removeView : function(idx) {
+            var view = this.views[idx];
+
+            this.diffusion.session.topicViews.removeTopicView(view.name).then(this.refreshTopicViews);
+        },
+        addMappingPart : function() {
+            this.builder.mapping.push({
+                source: "Literal",
+                value: undefined,
+                end: undefined
+            });
+
+            this.builder.selected = this.builder.mapping.length - 1;
+        },
+        removeMappingPart : function(idx) {
+            this.builder.mapping.splice(idx, 1);
+
+            if (this.builder.selected == idx) {
+                this.builder.selected = Math.max(this.builder.selected - 1, 0);
+            }
+        },
+        selectMappingPart : function(idx) {
+            this.builder.selected = idx;
+        },
+        deselectMapping : function() {
+            this.builder.selected = undefined;
+        },
+        validateMappingPart : function(idx) {
+            var part = this.builder.mapping[idx];
+
+            switch (part.source) {
+                case "Literal" :
+                    if (part.value === "") {
+                        return "Paths cannot be blank"
+                    }
+                    break;
+                case "Path" :
+                    var start = Number(part.value || 0);
+                    var end = Number(part.end || 0);
+
+                    if (Number.isInteger(start) && Number.isInteger(end)) {
+                        if (start > end) {
+                            return "Starting index cannot be greater than end";
+                        }
+                    } else if (part.value || part.end) {
+                        return "Indices must be positive integers"
+                    }
+
+                    break;
+                case "Value" :
+                    if (part.value === "") {
+                       return "JSON Pointer cannot be empty";
+                    }
+            }
+
+            return undefined;
+        }
+    },
+    computed: {
+        selectedPart : function() {
+            return this.builder.mapping[this.builder.selected];
+        },
+        mappingParts : function() {
+            var validate = this.validateMappingPart;
+            var selected = this.builder.selected;
+
+            return this.builder.mapping.map(function(part, idx) {
+                var classes = {
+                    badge : true,
+                    'badge-danger' : false,
+                    'badge-primary' : false
+                };
+
+                var error = validate(idx);
+                var value;
+
+                if (error) {
+                    classes['badge-danger'] = true;
+                    value = "<error>";
+                } else {
+                    switch (part.source) {
+                        case "Path" :
+                            var start = Number(part.value || 0);
+                            var end = Number(part.end || 0);
+
+                            if (error) {
+                                value = `path(!)`;
+                            } else {
+                                value = start <= end ? `path(${start})` : `path(${start}, ${end})`;
+                            }
+                            break;
+                        case "Value" :
+                            var v = part.value || "";
+
+                            if (error) {
+                                value = "value(!)";
+                            } else {
+                                value = `value(${v})`;
+                            }
+
+                            break;
+                        case "Literal" :
+                            value = part.value;
+                            break;
+                    }
+
+                }
+
+                if (idx === selected) {
+                    classes['badge-primary'] = true;
+                }
+
+                return {
+                    value : value,
+                    error : error,
+                    classes : classes
+                }
+            });
+        },
+        topicViewSpec : function() {
+            if (this.builder.selector) {
+                let mapping = this.builder.mapping.map(function(part) {
+                    switch (part.source) {
+                        case "Literal" :
+                            return part.value;
+                        case "Path" :
+                            return part.end <= part.value ? `<path(${part.value})>` : `<path(${part.value},${part.end})>`;
+                        default :
+                            return `<scalar(${part.value})>`;
+                    }
+                }).join("/");
+
+                return `map ${this.builder.selector} to ${mapping}`;
+            }
+
+            return "";
+        }
+    }
+});
+</script>
+
+<style>
+    .badge:hover {
+        background-color: #c8e4ff;
+        cursor: pointer;
+    }
+
+    .mapping-form {
+        border: 1px solid #ccc;
+        padding: 10px;
+        border-radius: 5px;
+    }
+
+    .btn-sm {
+        padding: 3px;
+        line-height: 12px;
+        font-size: 12px;
+    }
+
+</style>
+</body>
+</html>
